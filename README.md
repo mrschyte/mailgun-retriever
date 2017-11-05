@@ -1,6 +1,7 @@
 # mailgun-retriever
 
-```usage: mailgun-retriever.py [-h] -m DIRECTORY -d DOMAIN [-k KEY] [-l COUNT]
+```
+usage: mailgun-retriever.py [-h] -m DIRECTORY -d DOMAIN [-k KEY] [-l COUNT]
 
 Save stored mailgun messages to maildir
 
@@ -12,4 +13,5 @@ optional arguments:
                         mailgun domain to retrieve message from
   -k KEY, --apikey KEY  mailgun api key used for authentication
   -l COUNT, --limit COUNT
-                        limit the number of downloaded messages```
+                        limit the number of downloaded messages
+```
