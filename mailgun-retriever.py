@@ -47,19 +47,10 @@ class Mailgun(object):
                     break
                 data = resp.json()
 
-def slurp(path):
-    with open(path, 'r') as fp:
-        return (line.rstrip() for line in fp.readlines())
-
-def dumps(path, data):
-    with open(path, 'w') as fp:
-        fp.write(data)
-
 def main(args):
-    m = Mailgun(args.domain, args.apikey)
-    b = time.time()
-
     cachefile = os.path.join(args.maildir, '.mailcache')
+    begintime = time.time()
+    mailgun = Mailgun(args.domain, args.apikey)
 
     if os.path.isfile(cachefile):
         with open(cachefile, 'rb') as fp:
@@ -69,7 +60,7 @@ def main(args):
 
     mdir = mailbox.Maildir(args.maildir)
     print((Fore.WHITE + '[+] Retrieving messages for domain {}' + Style.RESET_ALL).format(args.domain))
-    for idx, item in enumerate(m.messages(raw=True, begin=seen['last'])):
+    for idx, item in enumerate(mailgun.messages(raw=True, begin=seen['last'])):
         if item['event']['timestamp'] > seen['last']:
             seen['last'] = item['event']['timestamp']
 
@@ -81,7 +72,7 @@ def main(args):
             print((Fore.CYAN + '> {}' + Style.RESET_ALL).format(item['message']['subject']))
             mdir.add(item['message']['body-mime'].encode('utf-8'))
             seen['messages'].add(item['message']['Message-Id'])
-    print((Fore.WHITE + '[+] Download completed in {}s' + Style.RESET_ALL).format(time.time() - b))
+    print((Fore.WHITE + '[+] Download completed in {}s' + Style.RESET_ALL).format(time.time() - begintime))
 
     with open(cachefile, 'wb') as fp:
         pickle.dump(seen, fp)
