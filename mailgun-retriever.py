@@ -8,6 +8,8 @@ import mailbox
 import argparse
 import getpass
 import time
+import pickle
+import os
 
 from colorama import Fore, Back, Style
 
@@ -76,15 +78,29 @@ def unique_lines(text, fudge=0.3):
 def main(args):
     m = Mailgun(args.domain, args.apikey)
     b = time.time()
+
+    cache = os.path.join(args.maildir, '.mailcache')
+
+    if os.path.isfile(cache):
+        with open(cache, 'rb') as fp:
+            seen = pickle.load(fp)
+    else:
+        seen = set()
+
     mdir = mailbox.Maildir(args.maildir)
     print((Fore.WHITE + '[+] Retrieving messages for domain {}' + Style.RESET_ALL).format(args.domain))
     for idx, event in enumerate(m.events(True)):
         if args.limit != None and idx >= args.limit:
             print(Fore.WHITE + '[+] Message download limit reached, exiting' + Style.RESET_ALL)
             break
-        print((Fore.CYAN + '> {}' + Style.RESET_ALL).format(event['subject']))
-        mdir.add(event['body-mime'].encode('utf-8'))
+        if event['Message-Id'] not in seen:
+            print((Fore.CYAN + '> {}' + Style.RESET_ALL).format(event['subject']))
+            mdir.add(event['body-mime'].encode('utf-8'))
+            seen.add(event['Message-Id'])
     print((Fore.WHITE + '[+] Download completed in {}s' + Style.RESET_ALL).format(time.time() - b))
+
+    with open(cache, 'wb') as fp:
+        pickle.dump(seen, fp)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Save stored mailgun messages to maildir')
