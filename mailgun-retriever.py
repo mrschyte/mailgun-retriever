@@ -33,7 +33,7 @@ class Mailgun(object):
                     content = requests.get(event['storage']['url'], auth=self.apikey, headers=headers)
                     if resp.status_code == 200:
                         tmp = content.json()
-                        if tmp['Message-Id'] not in done:
+                        if 'Message-Id' in tmp and tmp['Message-Id'] not in done:
                             done.add(tmp['Message-Id'])
                             yield tmp
                 resp = requests.get(data['paging']['next'])
