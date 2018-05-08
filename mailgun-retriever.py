@@ -15,18 +15,22 @@ from colorama import Fore, Back, Style
 
 class Mailgun(object):
     def __init__(self, domain, key):
-        self.apitop = "https://api.mailgun.net/v2/{}/".format(domain)
+        self.apitop = "https://api.mailgun.net/v3/{}/".format(domain)
         self.apikey = ("api", key)
         self.domain = domain
 
     def apiurl(self, api):
         return urllib.parse.urljoin(self.apitop, api)
 
-    def events(self, raw=False):
+    def messages(self, raw=False, begin=0):
         headers = {}
         if raw:
             headers['Accept'] = 'message/rfc2822'
-        resp = requests.get(self.apiurl("events"), auth=self.apikey)
+        resp = requests.get(self.apiurl("events"), auth=self.apikey, params={
+            'ascending': 'yes',
+            'begin': begin,
+            'event': 'stored'
+        })
         done = set()
         if resp.status_code == 200:
             data = resp.json()
@@ -37,69 +41,49 @@ class Mailgun(object):
                         tmp = content.json()
                         if 'Message-Id' in tmp and tmp['Message-Id'] not in done:
                             done.add(tmp['Message-Id'])
-                            yield tmp
+                            yield {'event': event, 'message': tmp}
                 resp = requests.get(data['paging']['next'])
                 if resp.status_code != 200:
                     break
                 data = resp.json()
 
-def longest_common_substring(s1, s2):
-    m = [[0] * (1 + len(s2)) for i in range(1 + len(s1))]
-    longest, x_longest = 0, 0
-    for x in range(1, 1 + len(s1)):
-        for y in range(1, 1 + len(s2)):
-            if s1[x - 1] == s2[y - 1]:
-                m[x][y] = m[x - 1][y - 1] + 1
-                if m[x][y] > longest:
-                    longest = m[x][y]
-                    x_longest = x
-            else:
-                m[x][y] = 0
-    return s1[x_longest - longest: x_longest]
+def slurp(path):
+    with open(path, 'r') as fp:
+        return (line.rstrip() for line in fp.readlines())
 
-def unique_lines(text, fudge=0.3):
-    output = ''
-    count = 1
-
-    lines = text.split('\n')
-    lines.append('')
-    lprev = lines[0]
-
-    for line in lines[1:]:
-        s = longest_common_substring(lprev, line)
-        if abs(len(s) - len(line)) <= len(line) * fudge:
-            count = count + 1
-        else:
-            output += (Fore.GREEN + '{0: <8}' + Style.RESET_ALL + '{1}\n').format(count, lprev)
-            count = 1
-        lprev = line
-    return output
+def dumps(path, data):
+    with open(path, 'w') as fp:
+        fp.write(data)
 
 def main(args):
     m = Mailgun(args.domain, args.apikey)
     b = time.time()
 
-    cache = os.path.join(args.maildir, '.mailcache')
+    cachefile = os.path.join(args.maildir, '.mailcache')
 
-    if os.path.isfile(cache):
-        with open(cache, 'rb') as fp:
+    if os.path.isfile(cachefile):
+        with open(cachefile, 'rb') as fp:
             seen = pickle.load(fp)
     else:
-        seen = set()
+        seen = {'last': 0.0, 'messages': set()}
 
     mdir = mailbox.Maildir(args.maildir)
     print((Fore.WHITE + '[+] Retrieving messages for domain {}' + Style.RESET_ALL).format(args.domain))
-    for idx, event in enumerate(m.events(True)):
+    for idx, item in enumerate(m.messages(raw=True, begin=seen['last'])):
+        if item['event']['timestamp'] > seen['last']:
+            seen['last'] = item['event']['timestamp']
+
         if args.limit != None and idx >= args.limit:
             print(Fore.WHITE + '[+] Message download limit reached, exiting' + Style.RESET_ALL)
             break
-        if event['Message-Id'] not in seen:
-            print((Fore.CYAN + '> {}' + Style.RESET_ALL).format(event['subject']))
-            mdir.add(event['body-mime'].encode('utf-8'))
-            seen.add(event['Message-Id'])
+
+        if item['message']['Message-Id'] not in seen['messages']:
+            print((Fore.CYAN + '> {}' + Style.RESET_ALL).format(item['message']['subject']))
+            mdir.add(item['message']['body-mime'].encode('utf-8'))
+            seen['messages'].add(item['message']['Message-Id'])
     print((Fore.WHITE + '[+] Download completed in {}s' + Style.RESET_ALL).format(time.time() - b))
 
-    with open(cache, 'wb') as fp:
+    with open(cachefile, 'wb') as fp:
         pickle.dump(seen, fp)
 
 if __name__ == "__main__":
