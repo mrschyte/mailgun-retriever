@@ -1,22 +1,18 @@
-import urllib.parse
-import requests  
-import datetime
-import pprint
-import json
-import sys
-import mailbox
 import argparse
 import getpass
-import time
-import pickle
+import mailbox
 import os
+import pickle
+import urllib.parse
+import time
+import requests
 
-from colorama import Fore, Back, Style
+from colorama import Fore, Style
 
 class Mailgun(object):
     def __init__(self, domain, key):
-        self.apitop = "https://api.mailgun.net/v3/{}/".format(domain)
-        self.apikey = ("api", key)
+        self.apitop = 'https://api.mailgun.net/v3/{}/'.format(domain)
+        self.apikey = ('api', key)
         self.domain = domain
 
     def apiurl(self, api):
@@ -26,7 +22,7 @@ class Mailgun(object):
         headers = {}
         if raw:
             headers['Accept'] = 'message/rfc2822'
-        resp = requests.get(self.apiurl("events"), auth=self.apikey, params={
+        resp = requests.get(self.apiurl('events'), auth=self.apikey, params={
             'ascending': 'yes',
             'begin': begin,
             'event': 'stored'
@@ -47,10 +43,10 @@ class Mailgun(object):
                     break
                 data = resp.json()
 
-def main(args):
-    cachefile = os.path.join(args.maildir, '.mailcache')
+def retrieve(cmdargs):
+    cachefile = os.path.join(cmdargs.maildir, '.mailcache')
     begintime = time.time()
-    mailgun = Mailgun(args.domain, args.apikey)
+    mailgun = Mailgun(cmdargs.domain, cmdargs.apikey)
 
     if os.path.isfile(cachefile):
         with open(cachefile, 'rb') as fp:
@@ -58,13 +54,13 @@ def main(args):
     else:
         seen = {'last': 0.0, 'messages': set()}
 
-    mdir = mailbox.Maildir(args.maildir)
-    print((Fore.WHITE + '[+] Retrieving messages for domain {}' + Style.RESET_ALL).format(args.domain))
+    mdir = mailbox.Maildir(cmdargs.maildir)
+    print((Fore.WHITE + '[+] Retrieving messages for domain {}' + Style.RESET_ALL).format(cmdargs.domain))
     for idx, item in enumerate(mailgun.messages(raw=True, begin=seen['last'])):
         if item['event']['timestamp'] > seen['last']:
             seen['last'] = item['event']['timestamp']
 
-        if args.limit != None and idx >= args.limit:
+        if cmdargs.limit != None and idx >= cmdargs.limit:
             print(Fore.WHITE + '[+] Message download limit reached, exiting' + Style.RESET_ALL)
             break
 
@@ -77,7 +73,7 @@ def main(args):
     with open(cachefile, 'wb') as fp:
         pickle.dump(seen, fp)
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description='Save stored mailgun messages to maildir')
     parser.add_argument('-m', '--maildir', metavar='DIRECTORY', required=True,
                         help='mail directory used to save messages to')
@@ -88,8 +84,12 @@ if __name__ == "__main__":
     parser.add_argument('-l', '--limit', metavar='COUNT', required=False, type=int,
                         help='limit the number of downloaded messages')
 
-    args = parser.parse_args()
+    cmdargs = parser.parse_args()
 
-    if args.apikey == None:
-        args.apikey = getpass.getpass((Fore.WHITE + '[+] Please enter the API key for domain {}:' + Style.RESET_ALL).format(args.domain))
-    main(args)
+    if cmdargs.apikey is None:
+        cmdargs.apikey = getpass.getpass((Fore.WHITE + '[+] Please enter the API key for domain {}:' + Style.RESET_ALL).format(cmdargs.domain))
+
+    retrieve(cmdargs)
+
+if __name__ == '__main__':
+    main()
