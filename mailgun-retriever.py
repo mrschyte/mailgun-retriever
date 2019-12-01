@@ -42,6 +42,12 @@ class Mailgun(object):
                 if resp.status_code != 200:
                     break
                 data = resp.json()
+        else:
+            if resp.headers.get('content-type') != 'application/json':
+                raise Exception('Unknown error occured')
+            else:
+                raise Exception(resp.json()['message'])
+
 
 def retrieve(cmdargs):
     cachefile = os.path.join(cmdargs.maildir, '.mailcache')
